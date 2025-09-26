@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Code Structure Planner with Class Diagram</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script type="module">
+    import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs";
+    mermaid.initialize({ startOnLoad: false });
+    window.mermaid = mermaid;
+  </script>
+</head>
+<body class="bg-gray-100 min-h-screen flex flex-col items-center p-6">
+  <h1 class="text-2xl font-bold mb-6">Code Structure Planner + Diagram</h1>
+
+  <!-- Add Section -->
+  <div class="flex gap-4 mb-6">
+    <button onclick="addClass()" class="px-4 py-2 bg-blue-500 text-white rounded-lg shadow">+ Add Class</button>
+    <button onclick="addFunction()" class="px-4 py-2 bg-green-500 text-white rounded-lg shadow">+ Add Function</button>
+    <button onclick="addFile()" class="px-4 py-2 bg-purple-500 text-white rounded-lg shadow">+ Add File</button>
+    <button onclick="generateDiagram()" class="px-4 py-2 bg-orange-500 text-white rounded-lg shadow">⚡ Generate Diagram</button>
+  </div>
+
+  <!-- Structure Output -->
+  <div id="structure" class="w-full max-w-3xl bg-white p-4 rounded-lg shadow space-y-4"></div>
+
+  <!-- Diagram Output -->
+  <h2 class="text-xl font-semibold mt-8 mb-2">Class Diagram</h2>
+  <div id="diagram" class="w-full max-w-4xl bg-white p-4 rounded-lg shadow overflow-x-auto"></div>
+
+  <script>
+    let idCounter = 0;
+    const items = [];
+
+    function createItem(type, content = "") {
+      idCounter++;
+      const wrapper = document.createElement("div");
+      wrapper.className = "border rounded-lg p-3 shadow-sm bg-gray-50";
+      wrapper.id = `${type}-${idCounter}`;
+
+      let label = document.createElement("input");
+      label.type = "text";
+      label.placeholder = `${type} name`;
+      label.value = content;
+      label.className = "border px-2 py-1 rounded w-2/3";
+
+      let removeBtn = document.createElement("button");
+      removeBtn.innerText = "×";
+      removeBtn.className = "ml-3 text-red-500 font-bold";
+      removeBtn.onclick = () => {
+        wrapper.remove();
+        items.splice(items.findIndex(i => i.id === wrapper.id), 1);
+      };
+
+      wrapper.appendChild(document.createTextNode(type.toUpperCase() + ": "));
+      wrapper.appendChild(label);
+      wrapper.appendChild(removeBtn);
+
+      const item = { id: wrapper.id, type, name: label.value, params: [] };
+      items.push(item);
+
+      label.addEventListener("input", () => { item.name = label.value; });
+
+      if (type === "function") {
+        let paramBtn = document.createElement("button");
+        paramBtn.innerText = "+ Param";
+        paramBtn.className = "ml-3 px-2 py-1 bg-yellow-400 text-black rounded";
+        paramBtn.onclick = () => addParam(wrapper, item);
+        wrapper.appendChild(paramBtn);
+
+        let paramList = document.createElement("ul");
+        paramList.className = "mt-2 list-disc list-inside text-sm";
+        wrapper.appendChild(paramList);
+      }
+
+      document.getElementById("structure").appendChild(wrapper);
+    }
+
+    function addClass() { createItem("class"); }
+    function addFunction() { createItem("function"); }
+    function addFile() { createItem("file"); }
+
+    function addParam(wrapper, item) {
+      const paramName = prompt("Enter parameter name:");
+      if (!paramName) return;
+      const paramList = wrapper.querySelector("ul");
+      let li = document.createElement("li");
+      li.innerText = paramName;
+      paramList.appendChild(li);
+      item.params.push(paramName);
+    }
+
+    async function generateDiagram() {
+      let diagramDef = "classDiagram\n";
+
+      // Gather classes and functions
+      const classes = items.filter(i => i.type === "class");
+      const functions = items.filter(i => i.type === "function");
+
+      if (classes.length === 0 && functions.length > 0) {
+        // if no classes defined, create Utility bucket
+        diagramDef += "class Utility {\n";
+        functions.forEach(f => {
+          const params = f.params.join(", ");
+          diagramDef += `  +${f.name}(${params})\n`;
+        });
+        diagramDef += "}\n";
+      } else {
+        classes.forEach(c => {
+          diagramDef += `class ${c.name} {\n`;
+          // attach all global functions under first class if no ownership defined
+          functions.forEach(f => {
+            const params = f.params.join(", ");
+            diagramDef += `  +${f.name}(${params})\n`;
+          });
+          diagramDef += "}\n";
+        });
+      }
+
+      try {
+        const { svg } = await mermaid.render("generatedDiagram", diagramDef);
+        document.getElementById("diagram").innerHTML = svg;
+      } catch (err) {
+        document.getElementById("diagram").innerHTML = `<pre class="text-red-500">${err.message}</pre><pre>${diagramDef}</pre>`;
+      }
+    }
+  </script>
+</body>
+</html>
