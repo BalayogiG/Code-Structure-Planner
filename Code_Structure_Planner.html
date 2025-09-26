@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Code Structure Planner with Class Diagram</title>
+  <title>Code Structure Planner + Diagram</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script type="module">
     import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs";
@@ -13,7 +13,6 @@
 <body class="bg-gray-100 min-h-screen flex flex-col items-center p-6">
   <h1 class="text-2xl font-bold mb-6">Code Structure Planner + Diagram</h1>
 
-  <!-- Add Section -->
   <div class="flex gap-4 mb-6">
     <button onclick="addClass()" class="px-4 py-2 bg-blue-500 text-white rounded-lg shadow">+ Add Class</button>
     <button onclick="addFunction()" class="px-4 py-2 bg-green-500 text-white rounded-lg shadow">+ Add Function</button>
@@ -21,10 +20,8 @@
     <button onclick="generateDiagram()" class="px-4 py-2 bg-orange-500 text-white rounded-lg shadow">⚡ Generate Diagram</button>
   </div>
 
-  <!-- Structure Output -->
   <div id="structure" class="w-full max-w-3xl bg-white p-4 rounded-lg shadow space-y-4"></div>
 
-  <!-- Diagram Output -->
   <h2 class="text-xl font-semibold mt-8 mb-2">Class Diagram</h2>
   <div id="diagram" class="w-full max-w-4xl bg-white p-4 rounded-lg shadow overflow-x-auto"></div>
 
@@ -56,12 +53,19 @@
       wrapper.appendChild(label);
       wrapper.appendChild(removeBtn);
 
-      const item = { id: wrapper.id, type, name: label.value, params: [] };
+      const item = { id: wrapper.id, type, name: label.value, params: [], parentClass: null };
       items.push(item);
 
       label.addEventListener("input", () => { item.name = label.value; });
 
       if (type === "function") {
+        // Dropdown to assign function to a class
+        let select = document.createElement("select");
+        select.className = "ml-3 border px-2 py-1 rounded";
+        updateClassOptions(select);
+        select.onchange = () => { item.parentClass = select.value; };
+        wrapper.appendChild(select);
+
         let paramBtn = document.createElement("button");
         paramBtn.innerText = "+ Param";
         paramBtn.className = "ml-3 px-2 py-1 bg-yellow-400 text-black rounded";
@@ -76,7 +80,17 @@
       document.getElementById("structure").appendChild(wrapper);
     }
 
-    function addClass() { createItem("class"); }
+    function updateClassOptions(select) {
+      select.innerHTML = `<option value="">--Select Class--</option>` +
+        items.filter(i => i.type === "class").map(c => `<option value="${c.name}">${c.name}</option>`).join("");
+    }
+
+    function addClass() {
+      createItem("class");
+      // refresh all function dropdowns
+      document.querySelectorAll("select").forEach(updateClassOptions);
+    }
+
     function addFunction() { createItem("function"); }
     function addFile() { createItem("file"); }
 
@@ -93,28 +107,26 @@
     async function generateDiagram() {
       let diagramDef = "classDiagram\n";
 
-      // Gather classes and functions
       const classes = items.filter(i => i.type === "class");
       const functions = items.filter(i => i.type === "function");
 
-      if (classes.length === 0 && functions.length > 0) {
-        // if no classes defined, create Utility bucket
-        diagramDef += "class Utility {\n";
-        functions.forEach(f => {
+      classes.forEach(c => {
+        diagramDef += `class ${c.name} {\n`;
+        functions.filter(f => f.parentClass === c.name).forEach(f => {
           const params = f.params.join(", ");
           diagramDef += `  +${f.name}(${params})\n`;
         });
         diagramDef += "}\n";
-      } else {
-        classes.forEach(c => {
-          diagramDef += `class ${c.name} {\n`;
-          // attach all global functions under first class if no ownership defined
-          functions.forEach(f => {
-            const params = f.params.join(", ");
-            diagramDef += `  +${f.name}(${params})\n`;
-          });
-          diagramDef += "}\n";
+      });
+
+      const orphanFuncs = functions.filter(f => !f.parentClass);
+      if (orphanFuncs.length > 0) {
+        diagramDef += "class Utility {\n";
+        orphanFuncs.forEach(f => {
+          const params = f.params.join(", ");
+          diagramDef += `  +${f.name}(${params})\n`;
         });
+        diagramDef += "}\n";
       }
 
       try {
